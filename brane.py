@@ -1,5 +1,6 @@
-import numpy
-import scipy
+import numpy as np
+import scipy as sp
+import numpy.linalg as la
 
 def logQ(x, mean, precOvr2, logsqrtprecovr2pi):
 	xRel = x - mean
@@ -7,13 +8,15 @@ def logQ(x, mean, precOvr2, logsqrtprecovr2pi):
 
 class MHString:
 
-	def __init__(self, D, n_nodes, p_join, beta):
+	def __init__(self, D, n_nodes, p_join, beta, alpha0, logtarget_distrib):
 		self.n_nodes = n_nodes
 		self.D = D
 		self.X = np.zeros((D, n_nodes))
 		self.p_join = p_join
 		self.beta = beta 
 		self.getNewAdjMatrix()
+		self.alpha0 = alpha0
+		self.logtarget_distrib = logtarget_distrib
 
 	def getNumNodes(self):
 		return self.n_nodes
@@ -32,13 +35,12 @@ class MHString:
 	def getNewAdjMatrix(self):
 		S = np.identity(self.n_nodes)
 		S = np.random.permutation(S)
-
-		A = np.random.rand(self.n_nodes, self.n_nodes)
-		A = np.greater(self.p_join, A)
-		A = (A + np.transpose(A))/2
-		A = A - np.diagflat(np.diagonal(A)) + np.diagflat(np.ones(self.n_nodes))
-		self.Adj = A
-		return S*(A*S.I)
+		A = 0.5*np.identity(self.n_nodes)
+		for agent in range(self.n_nodes-1):
+			A[agent, agent+1] = 1.0*np.greater(self.p_join, np.random.rand())
+		A = (A + np.transpose(A))
+		self.Adj = np.dot(S, np.dot(A, la.inv(S)))
+		return self.Adj
 
 	def getProposal(self, updateIndex):
 
@@ -61,7 +63,7 @@ class MHString:
 		proposal = np.zeros((self.D, 1))
 		for d in range(self.D):
 			currentD = current[d]
-			preMeanSum = alhpa*currentD
+			preMeanSum = alpha*currentD
 			preMeanSum = preMeanSum + np.sum(beta*neighborValues[d, :])
 			preMean = preMeanSum * mean_norm
 
@@ -76,11 +78,14 @@ class MHString:
 
 		return (proposal, current, propForwardE, propReverseE)
 
+	def getTargetRatio(self, proposal, current):
+		return np.exp(self.logtarget_distrib(proposal) - self.logtarget_distrib(current))
+
 	def MHAccept(self, proposal, current, propReverseE, propForwardE):
 
 		target_ratio = self.getTargetRatio(proposal, current)
 		a_rat = target_ratio*np.exp(propReverseE - propForwardE)
-		a_prob = np.minimum((1, a_rat))
+		a_prob = np.minimum(1, a_rat)
 		accept = False
 		if np.random.rand() < a_prob:
 			accept = True
@@ -89,7 +94,25 @@ class MHString:
 	def MHUpdate(self, updateIndex):
 
 		proposal, current, pFe, pRe = self.getProposal(updateIndex)
-		if MHAccept(proposal, pRe, pFe):
+		if self.MHAccept(proposal, current, pRe, pFe):
 			self.X[:, updateIndex] = proposal
 		self.getNewAdjMatrix()
 
+	def setup_sampling(self, T, nskip):
+		self.samples = np.zeros((T, self.D, self.n_nodes))
+		self.nskip = nskip
+		self.T = T
+
+	def sample(self):
+
+		samples_to_go = self.T
+		iteration = 0
+		nsamples = 0
+		while nsamples < self.T:
+			iteration = iteration+1
+			for ind in range(self.n_nodes):
+				self.MHUpdate(ind)
+			if np.mod(iteration, nskip)==0:
+				self.samples[nsamples, :] = self.X
+				nsamples = nsamples+1
+		return self.samples
