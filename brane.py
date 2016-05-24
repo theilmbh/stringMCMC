@@ -15,8 +15,6 @@ class MHString:
 		self.beta = beta 
 		self.getNewAdjMatrix()
 
-	def getNeighborCount(self, elementIndex):
-
 	def getNumNodes(self):
 		return self.n_nodes
 
@@ -76,4 +74,22 @@ class MHString:
 			propReverseE = propReverseE + -1.0*logQ(currentD, postMean, precOvr2, logsqrtprecovr2pi)
 			propForwardE = propForwardE + -1.0*logQ(proposalValue, preMean, precOvr2, logsqrtprecovr2pi)
 
-		self.MHUpdate(proposal, propReverseE, propForwardE)
+		return (proposal, current, propForwardE, propReverseE)
+
+	def MHAccept(self, proposal, current, propReverseE, propForwardE):
+
+		target_ratio = self.getTargetRatio(proposal, current)
+		a_rat = target_ratio*np.exp(propReverseE - propForwardE)
+		a_prob = np.minimum((1, a_rat))
+		accept = False
+		if np.random.rand() < a_prob:
+			accept = True
+		return accept
+
+	def MHUpdate(self, updateIndex):
+
+		proposal, current, pFe, pRe = self.getProposal(updateIndex)
+		if MHAccept(proposal, pRe, pFe):
+			self.X[:, updateIndex] = proposal
+		self.getNewAdjMatrix()
+
