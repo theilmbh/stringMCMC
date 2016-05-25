@@ -11,7 +11,7 @@ class MHString:
 	def __init__(self, D, n_nodes, p_join, beta, alpha0, logtarget_distrib):
 		self.n_nodes = n_nodes
 		self.D = D
-		self.X = np.zeros((D, n_nodes))
+		self.X = np.random.randn(D, n_nodes)
 		self.p_join = p_join
 		self.beta = beta 
 		self.getNewAdjMatrix()
@@ -95,7 +95,7 @@ class MHString:
 
 		proposal, current, pFe, pRe = self.getProposal(updateIndex)
 		if self.MHAccept(proposal, current, pRe, pFe):
-			self.X[:, updateIndex] = proposal
+			self.X[:, updateIndex] = np.squeeze(proposal)
 		self.getNewAdjMatrix()
 
 	def setup_sampling(self, T, nskip):
@@ -112,7 +112,7 @@ class MHString:
 			iteration = iteration+1
 			for ind in range(self.n_nodes):
 				self.MHUpdate(ind)
-			if np.mod(iteration, nskip)==0:
+			if np.mod(iteration, self.nskip)==0:
 				self.samples[nsamples, :] = self.X
 				nsamples = nsamples+1
 		return self.samples
